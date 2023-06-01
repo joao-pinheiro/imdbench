@@ -483,7 +483,7 @@ def insert_movie_plus(conn, val):
 
 def setup(ctx, conn, queryname):
     if queryname == 'update_movie':
-        cur = conn.cursor()
+        cur = conn._conn.cursor()
         cur.execute('''
             UPDATE
                 movies
@@ -494,7 +494,7 @@ def setup(ctx, conn, queryname):
         ''')
         conn.commit()
     elif queryname == 'insert_user':
-        cur = conn.cursor()
+        cur = conn._conn.cursor()
         cur.execute('''
             DELETE FROM
                 users
@@ -503,7 +503,7 @@ def setup(ctx, conn, queryname):
         ''', [f'{INSERT_PREFIX}%'])
         conn.commit()
     elif queryname in {'insert_movie', 'insert_movie_plus'}:
-        cur = conn.cursor()
+        cur = conn._conn.cursor()
         cur.execute('''
             DELETE FROM
                 "directors" as D
