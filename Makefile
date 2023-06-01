@@ -160,10 +160,10 @@ load-edgedb-nosetup:
 
 load-rick: $(BUILD)/dataset.json docker-postgres
 	$(PSQL_CMD) -U postgres_bench -d postgres_bench \
-			--file=$(CURRENT_DIR)/_rick/schema.sql
+			--file=$(CURRENT_DIR)/_rick_db/schema.sql
 
-	$(PP) _rick/loaddata.py $(BUILD)/dataset.json
-	cd _rick && npm i
+	$(PP) _rick_db/loaddata.py $(BUILD)/dataset.json
+	cd _rick_db && npm i
 
 load-django: $(BUILD)/dataset.json docker-postgres
 	$(PSQL_CMD) -tc \

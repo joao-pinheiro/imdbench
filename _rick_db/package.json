@@ -1,0 +1,16 @@
+{
+  "name": "_postgres",
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=14"
+  },
+  "repository": {
+    "type": "",
+    "url": ""
+  },
+  "license": "UNLICENSED",
+  "description": "_postgres",
+  "dependencies": {
+    "pg": "^8.11.0"
+  }
+}
