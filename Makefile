@@ -158,6 +158,12 @@ load-edgedb: $(BUILD)/edbdataset.json docker-edgedb
 load-edgedb-nosetup:
 	$(PP) -m _edgedb.loaddata $(BUILD)/edbdataset.json
 
+load-rick: $(BUILD)/dataset.json docker-postgres
+	$(PSQL_CMD) -U postgres_bench -d postgres_bench \
+			--file=$(CURRENT_DIR)/_rick/schema.sql
+
+	$(PP) _rick/loaddata.py $(BUILD)/dataset.json
+	cd _rick && npm i
 
 load-django: $(BUILD)/dataset.json docker-postgres
 	$(PSQL_CMD) -tc \
@@ -313,3 +319,6 @@ run-edgedb:
 
 run-scratch:
 	python bench.py --query insert_movie --concurrency 1 --warmup-time 2 --duration 5 --html docs/scratch.html edgedb_go
+
+run-rick:
+	$(RUNNER) --html docs/sql.html --json docs/rick.json rick

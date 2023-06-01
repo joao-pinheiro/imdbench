@@ -29,7 +29,7 @@ from _sqlalchemy import queries as sqlalchemy_queries
 from _sqlalchemy import queries_asyncio as sqlalchemy_queries_asyncio
 from _postgres import queries as postgres_queries
 from _postgres import queries_psycopg as postgres_psycopg_queries
-
+from _rick_db import queries as rickdb_queries
 
 class impl(typing.NamedTuple):
     language: str
@@ -129,6 +129,10 @@ IMPLEMENTATIONS = {
 
     'postgres_dart':
         impl('dart', 'Postgres (Dart)', None),
+
+    'rickdb':
+        impl('python', 'PostgreSQL (Pyhton, rick_db)', rickdb_queries),
+
 }
 
 
