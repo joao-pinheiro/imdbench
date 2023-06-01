@@ -7,7 +7,7 @@ class App {
     options = {
       user: "postgres_bench",
       host: "localhost",
-      database: "rickdb_bench",
+      database: "postgres_bench",
       password: "edgedbbenchmark",
       port: 15432,
       ...(options || {})

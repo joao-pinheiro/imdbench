@@ -22,7 +22,7 @@ INSERT_PREFIX = 'insert_test__'
 def connect(ctx):
     conn = PgConnection(
         user='postgres_bench',
-        dbname='rickdb_bench',
+        dbname='postgres_bench',
         password='edgedbbenchmark',
         host=ctx.db_host,
         port=ctx.pg_port
