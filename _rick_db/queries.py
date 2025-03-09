@@ -683,7 +683,7 @@ def setup(ctx, conn, queryname):
             update_query = update.Update() \
                 .table("movies") \
                 .set({"title": L("split_part(movies.title, '---', 1)")}) \
-                .where("title", L("like '%---%'"))
+                .where("title", "like",  f'%---%')
 
             q, v = update_query.assemble()
             c.exec(q, v)
@@ -692,7 +692,7 @@ def setup(ctx, conn, queryname):
             # Delete test users
             delete_query = delete.Delete() \
                 .from_("users") \
-                .where_like("name", L("LIKE {}".format(f'{INSERT_PREFIX}%')))
+                .where_like("name", "LIKE", f'{INSERT_PREFIX}%')
 
             q, v = delete_query.assemble()
             c.exec(q, v)
@@ -721,7 +721,7 @@ def setup(ctx, conn, queryname):
             # Delete test movies
             delete_movies_query = delete.Delete() \
                 .from_("movies") \
-                .where("image", L("LIKE {}".format(f'{INSERT_PREFIX}%')))
+                .where("image", "LIKE", f'{INSERT_PREFIX}%')
 
             q, v = delete_movies_query.assemble()
             c.exec(q, v)
@@ -729,7 +729,7 @@ def setup(ctx, conn, queryname):
             # Delete test persons
             delete_persons_query = delete.Delete() \
                 .from_("persons") \
-                .where("image", L("LIKE {}".format(f'{INSERT_PREFIX}%')))
+                .where("image", "LIKE",f'{INSERT_PREFIX}%')
 
             q, v = delete_persons_query.assemble()
             c.exec(q, v)
