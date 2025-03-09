@@ -332,3 +332,6 @@ run-edgedb:
 
 run-scratch:
 	python bench.py --query insert_movie --concurrency 1 --warmup-time 2 --duration 5 --html docs/scratch.html edgedb_go
+
+run-rick_db:
+	$(RUNNER) --html docs/py.html --json docs/py.json rick_db

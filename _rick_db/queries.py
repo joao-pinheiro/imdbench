@@ -11,7 +11,7 @@ import typing
 from decimal import Decimal
 
 from rick_db import fieldmapper
-from rick_db.connection import Connection
+from rick_db.backend.pg import PgConnection
 from rick_db.repository import Repository
 from rick_db.sql import select, insert, update, delete, sql_with
 from rick_db.sql.common import Literal as L
@@ -80,8 +80,7 @@ INSERT_PREFIX = 'insert_test__'
 # Connection function
 def connect(ctx):
     # Configure connection to match database used by other benchmarks
-    conn = Connection(
-        dbtype="pg",
+    conn = PgConnection(
         host=ctx.db_host,
         port=ctx.pg_port,
         dbname="postgres_bench",
