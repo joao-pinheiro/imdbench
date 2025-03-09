@@ -490,7 +490,7 @@ def insert_movie(conn, val):
     # Get director and actors
     people_query = select.Select(dialect) \
         .from_("persons", ["id", "first_name", "last_name", "full_name(persons) as full_name", "image"]) \
-        .where_in("id", val["people"][:4])
+        .where("id", "IN", "({})".format(",".join(val["people"][:4])))
 
     with conn.cursor() as c:
         q, v = people_query.assemble()
