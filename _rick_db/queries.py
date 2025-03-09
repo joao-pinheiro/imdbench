@@ -10,23 +10,21 @@ import random
 import typing
 from decimal import Decimal
 
-from rick_db import record
+from rick_db import fieldmapper
 from rick_db.connection import Connection
 from rick_db.repository import Repository
 from rick_db.sql import select, insert, update, delete, sql_with
 from rick_db.sql.common import Literal as L
 
 # Define Record classes for our models
-class Person(record.Record):
-    __tablename__ = "persons"
-    __primary_key__ = "id"
-    
-    id: int
-    first_name: str
-    middle_name: str
-    last_name: str
-    image: str
-    bio: str
+@fieldmapper(tablename="persons", pk="id")
+class Person:
+    id="id"
+    first_name="first_name"
+    middle_name="middle_name"
+    last_name="last_name"
+    image="image"
+    bio="b"
     
     @property
     def full_name(self) -> str:
@@ -34,57 +32,47 @@ class Person(record.Record):
             return f"{self.first_name} {self.middle_name} {self.last_name}"
         return f"{self.first_name} {self.last_name}"
 
-class Movie(record.Record):
-    __tablename__ = "movies"
-    __primary_key__ = "id"
-    
-    id: int
-    title: str
-    image: str
-    description: str
-    year: int
+@fieldmapper(tablename="movies", pk="id")
+class Movie:
+    id="id"
+    title="title"
+    image="image"
+    description="description"
+    year="year"
     
     @property
     def avg_rating(self) -> float:
         return 0.0  # Will be populated by SQL directly
 
-class User(record.Record):
-    __tablename__ = "users"
-    __primary_key__ = "id"
-    
-    id: int
-    name: str
-    image: str
+@fieldmapper(tablename="users", pk="id")
+class User:
+    id="id"
+    name="name"
+    image="image"
 
-class Review(record.Record):
-    __tablename__ = "reviews"
-    __primary_key__ = "id"
-    
-    id: int
-    body: str
-    rating: int
-    creation_time: str
-    author_id: int
-    movie_id: int
+@fieldmapper(tablename="reviews", pk="id")
+class Review:
+    id="id"
+    body="body"
+    rating="rating"
+    creation_time="creation_time"
+    author_id="author_id"
+    movie_id="movie_id"
 
 # Define Directors and Actors join tables
-class Director(record.Record):
-    __tablename__ = "directors"
-    __primary_key__ = "id"
-    
-    id: int
-    person_id: int
-    movie_id: int
-    list_order: typing.Optional[int] = None
+@fieldmapper(tablename="directors", pk="id")
+class Director:
+    id="id"
+    person_id="person_id"
+    movie_id="movie_id"
+    list_order="list_order"
 
-class Actor(record.Record):
-    __tablename__ = "actors"
-    __primary_key__ = "id"
-    
-    id: int
-    person_id: int
-    movie_id: int
-    list_order: typing.Optional[int] = None
+@fieldmapper(tablename="actors", pk="id")
+class Actor:
+    id="id"
+    person_id="person_id"
+    movie_id="movie_id"
+    list_order="list_order"
 
 ASYNC = False
 INSERT_PREFIX = 'insert_test__'
