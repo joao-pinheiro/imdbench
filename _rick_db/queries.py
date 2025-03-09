@@ -98,9 +98,9 @@ def load_ids(ctx, conn):
     Uses rick_db's query builder to create the SELECT queries.
     """
     # Create random order queries with rick_db's query builder
-    user_query = select.Select().from_("users", "u").order_by("RANDOM()").limit(ctx.number_of_ids)
-    movie_query = select.Select().from_("movies", "m").order_by("RANDOM()").limit(ctx.number_of_ids)
-    person_query = select.Select().from_("persons", "p").order_by("RANDOM()").limit(ctx.number_of_ids)
+    user_query = select.Select().from_("users", "u").order(L("RANDOM()")).limit(ctx.number_of_ids)
+    movie_query = select.Select().from_("movies", "m").order(L("RANDOM()")).limit(ctx.number_of_ids)
+    person_query = select.Select().from_("persons", "p").order(L("RANDOM()")).limit(ctx.number_of_ids)
     
     # Execute the queries
     users = conn.cursor().exec(user_query.query(), user_query.values())
@@ -142,7 +142,7 @@ def get_user(conn, id):
         .from_('reviews', 'review') \
         .join_inner('movies', 'movie', 'review.movie_id', 'movie.id') \
         .where('review.author_id', '=', L('users.id')) \
-        .order_by('review.creation_time DESC') \
+        .order(Review.creation_time, 'DESC') \
         .limit(10)
     
     # Build the main query with a LATERAL join
@@ -193,7 +193,7 @@ def get_movie(conn, id):
         .from_("directors") \
         .join_inner("persons", "person", "directors.person_id", "person.id") \
         .where("directors.movie_id", "=", L("movies.id")) \
-        .order_by(L("directors.list_order NULLS LAST, person.last_name"))
+        .order(L("directors.list_order NULLS LAST, person.last_name"))
     
     # Actors subquery
     actors_query = select.Select() \
@@ -201,7 +201,7 @@ def get_movie(conn, id):
         .from_("actors") \
         .join_inner("persons", "person", "actors.person_id", "person.id") \
         .where("actors.movie_id", "=", L("movies.id")) \
-        .order_by(L("actors.list_order NULLS LAST, person.last_name"))
+        .order(L("actors.list_order NULLS LAST, person.last_name"))
     
     # Reviews subquery with nested author subquery
     reviews_query = select.Select() \
@@ -215,7 +215,7 @@ def get_movie(conn, id):
         ) AS v""")]) \
         .from_("reviews", "review") \
         .where("review.movie_id", "=", L("movies.id")) \
-        .order_by("review.creation_time DESC")
+        .order(Review.creation_time, "DESC")
     
     # Main movie query using rick_db's query builder
     movie_query = select.Select() \
@@ -294,7 +294,7 @@ def get_person(conn, id):
         .from_("actors") \
         .join_inner("movies", "movie", "actors.movie_id", "movie.id") \
         .where("actors.person_id", "=", L("person.id")) \
-        .order_by(L("movie.year ASC, movie.title ASC"))
+        .order(L("movie.year ASC, movie.title ASC"))
     
     # Movies directed subquery
     directed_query = select.Select() \
@@ -302,7 +302,7 @@ def get_person(conn, id):
         .from_("directors") \
         .join_inner("movies", "movie", "directors.movie_id", "movie.id") \
         .where("directors.person_id", "=", L("person.id")) \
-        .order_by(L("movie.year ASC, movie.title ASC"))
+        .order(L("movie.year ASC, movie.title ASC"))
     
     # Main person query
     person_query = select.Select() \
