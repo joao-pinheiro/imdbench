@@ -104,9 +104,9 @@ def load_ids(ctx, conn):
     
     # Execute the queries
     with conn.cursor() as c:
-        users = c.exec(user_query.query(), user_query.values())
-        movies = c.exec(movie_query.query(), movie_query.values())
-        people = c.exec(person_query.query(), person_query.values())
+        users = c.exec(user_query.assemble())
+        movies = c.exec(movie_query.assemble())
+        people = c.exec(person_query.assemble())
     
     return dict(
         get_user=[u["id"] for u in users],
@@ -155,7 +155,7 @@ def get_user(conn, id):
     
     # Execute the query
     with conn.cursor() as c:
-        rows = c.exec(user_query.query(), user_query.values())
+        rows = c.exec(user_query.assemble())
     
     if not rows:
         return json.dumps({})
@@ -188,7 +188,8 @@ def get_movie(conn, id):
     """
     # This query uses a mix of rick_db query builder and SQL functions
     # We use CTEs (WITH clauses) to structure complex subqueries
-    
+    values = []
+
     # Directors subquery
     directors_query = select.Select() \
         .fields([L("ROW(person.id, person.full_name, person.image) AS v")]) \
@@ -196,7 +197,10 @@ def get_movie(conn, id):
         .join_inner("persons", "person", "directors.person_id", "person.id") \
         .where("directors.movie_id", "=", L("movies.id")) \
         .order(L("directors.list_order NULLS LAST, person.last_name"))
-    
+
+    dq,v = directors_query.assemble()
+    values.append(v)
+
     # Actors subquery
     actors_query = select.Select() \
         .fields([L("ROW(person.id, person.full_name, person.image) AS v")]) \
@@ -204,7 +208,10 @@ def get_movie(conn, id):
         .join_inner("persons", "person", "actors.person_id", "person.id") \
         .where("actors.movie_id", "=", L("movies.id")) \
         .order(L("actors.list_order NULLS LAST, person.last_name"))
-    
+
+    aq,v = actors_query.assemble()
+    values.append(v)
+
     # Reviews subquery with nested author subquery
     reviews_query = select.Select() \
         .fields([L("""ROW(
@@ -218,7 +225,10 @@ def get_movie(conn, id):
         .from_("reviews", "review") \
         .where("review.movie_id", "=", L("movies.id")) \
         .order(Review.creation_time, "DESC")
-    
+
+    rq,v = reviews_query.assemble()
+    values.append(v)
+
     # Main movie query using rick_db's query builder
     movie_query = select.Select() \
         .fields([
@@ -229,18 +239,21 @@ def get_movie(conn, id):
             'movie.description',
             'movie.avg_rating',
             L(f"""(SELECT COALESCE(array_agg(q.v), (ARRAY[])::record[]) 
-                FROM ({directors_query.query()}) AS q) AS directors"""),
+                FROM ({dq}) AS q) AS directors"""),
             L(f"""(SELECT COALESCE(array_agg(q.v), (ARRAY[])::record[]) 
-                FROM ({actors_query.query()}) AS q) AS actors"""),
+                FROM ({aq}) AS q) AS actors"""),
             L(f"""(SELECT COALESCE(array_agg(q.v), (ARRAY[])::record[]) 
-                FROM ({reviews_query.query()}) AS q) AS reviews""")
+                FROM ({rq}) AS q) AS reviews""")
         ]) \
         .from_("movies", "movie") \
         .where("movie.id", "=", id)
     
     # Execute the query
+    mq, v = movie_query.assemble()
+    values.append(v)
+
     with conn.cursor() as c:
-        movie = c.fetchone(movie_query.query(), movie_query.values())
+        movie = c.fetchone(mq, v)
     
     if not movie:
         return json.dumps({})
@@ -298,7 +311,11 @@ def get_person(conn, id):
         .join_inner("movies", "movie", "actors.movie_id", "movie.id") \
         .where("actors.person_id", "=", L("person.id")) \
         .order(L("movie.year ASC, movie.title ASC"))
-    
+
+    values = []
+    aq, v = acted_in_query.assemble()
+    values.append(v)
+
     # Movies directed subquery
     directed_query = select.Select() \
         .fields([L("ROW(movie.id, movie.image, movie.title, movie.year, movie.avg_rating) AS v")]) \
@@ -306,7 +323,10 @@ def get_person(conn, id):
         .join_inner("movies", "movie", "directors.movie_id", "movie.id") \
         .where("directors.person_id", "=", L("person.id")) \
         .order(L("movie.year ASC, movie.title ASC"))
-    
+
+    dq,v=directed_query.assemble()
+    values.append(v)
+
     # Main person query
     person_query = select.Select() \
         .fields([
@@ -315,16 +335,19 @@ def get_person(conn, id):
             'person.image',
             'person.bio',
             L(f"""(SELECT COALESCE(array_agg(q.v), (ARRAY[])::record[]) 
-                FROM ({acted_in_query.query()}) AS q) AS acted_in"""),
+                FROM ({aq}) AS q) AS acted_in"""),
             L(f"""(SELECT COALESCE(array_agg(q.v), (ARRAY[])::record[]) 
-                FROM ({directed_query.query()}) AS q) AS directed""")
+                FROM ({dq}) AS q) AS directed""")
         ]) \
         .from_("persons", "person") \
         .where("person.id", "=", id)
-    
+
+    pq, v = person_query.assemble()
+    values.append(v)
+
     # Execute the query
     with conn.cursor() as c:
-        person = c.fetchone(person_query.query(), person_query.values())
+        person = c.fetchone(pq, v)
     
     if not person:
         return json.dumps({})
@@ -380,7 +403,7 @@ def update_movie(conn, id):
         
         # Execute the query
         with conn.cursor() as c:
-            result = c.exec(update_query.query(), values)
+            result = c.exec(update_query.assemble())
         
         if not result or len(result) == 0:
             return json.dumps({})
@@ -406,10 +429,10 @@ def insert_user(conn, val):
                 "image": f'{val}image{num}'
             }) \
             .returning(["id", "name", "image"])
-        
+
         # Execute the query
         with conn.cursor() as c:
-            result = c.fetchone(insert_query.query(), insert_query.values())
+            result = c.fetchone(insert_query.assemble())
         
         return json.dumps({
             'id': result['id'],
@@ -437,7 +460,7 @@ def insert_movie(conn, val):
             .returning(["id", "title", "image", "description", "year"])
 
         with conn.cursor() as c:
-            movie = c.fetchone(movie_insert.query(), movie_insert.values())
+            movie = c.fetchone(movie_insert.assemble())
         
         # Get director and actors
         people_query = select.Select() \
@@ -446,7 +469,7 @@ def insert_movie(conn, val):
             .where_in("id", val["people"][:4])
 
         with conn.cursor() as c:
-            people = c.exec(people_query.query(), people_query.values())
+            people = c.exec(people_query.assemble())
         
         # Add director
         director_insert = insert.Insert() \
@@ -457,7 +480,7 @@ def insert_movie(conn, val):
             })
 
         with conn.cursor() as c:
-            c.exec(director_insert.query(), director_insert.values())
+            c.exec(director_insert.assemble())
         
         # Add actors
         with conn.cursor() as c:
@@ -468,7 +491,7 @@ def insert_movie(conn, val):
                         "person_id": people[i]["id"],
                         "movie_id": movie["id"]
                     })
-                c.exec(actor_insert.query(), actor_insert.values())
+                c.exec(actor_insert.assemble())
             
     # Construct response object
     return json.dumps({
@@ -513,7 +536,7 @@ def insert_movie_plus(conn, val):
                 }) \
                 .returning(["id", "title", "image", "description", "year"])
 
-            movie = c.fetchone(movie_insert.query(), movie_insert.values())
+            movie = c.fetchone(movie_insert.assemble())
 
             # Insert director
             director_insert = insert.Insert() \
@@ -527,7 +550,7 @@ def insert_movie_plus(conn, val):
                 }) \
                 .returning(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"])
 
-            director = c.fetchone(director_insert.query(), director_insert.values())
+            director = c.fetchone(director_insert.assemble())
 
             # Insert actor 1
             actor1_insert = insert.Insert() \
@@ -541,7 +564,7 @@ def insert_movie_plus(conn, val):
                 }) \
                 .returning(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"])
 
-            actor1 = c.fetchone(actor1_insert.query(), actor1_insert.values())
+            actor1 = c.fetchone(actor1_insert.assemble())
 
             # Insert actor 2
             actor2_insert = insert.Insert() \
@@ -555,7 +578,7 @@ def insert_movie_plus(conn, val):
                 }) \
                 .returning(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"])
 
-            actor2 = c.fetchone(actor2_insert.query(), actor2_insert.values())
+            actor2 = c.fetchone(actor2_insert.assemble())
 
             # Link director
             d_link_insert = insert.Insert() \
@@ -565,7 +588,7 @@ def insert_movie_plus(conn, val):
                     "movie_id": movie["id"]
                 })
 
-            c.exec(d_link_insert.query(), d_link_insert.values())
+            c.exec(d_link_insert.assemble())
 
             # Link actor 1
             a1_link_insert = insert.Insert() \
@@ -575,7 +598,7 @@ def insert_movie_plus(conn, val):
                     "movie_id": movie["id"]
                 })
 
-            c.exec(a1_link_insert.query(), a1_link_insert.values())
+            c.exec(a1_link_insert.assemble())
 
             # Link actor 2
             a2_link_insert = insert.Insert() \
@@ -585,7 +608,7 @@ def insert_movie_plus(conn, val):
                     "movie_id": movie["id"]
                 })
 
-            c.exec(a2_link_insert.query(), a2_link_insert.values())
+            c.exec(a2_link_insert.assemble())
     
     return json.dumps({
         'id': movie['id'],
@@ -627,7 +650,7 @@ def setup(ctx, conn, queryname):
                 .set({"title": L("split_part(movies.title, '---', 1)")}) \
                 .where_like("title", '%---%')
 
-            c.exec(update_query.query(), update_query.values())
+            c.exec(update_query.assemble())
 
         elif queryname == 'insert_user':
             # Delete test users
@@ -635,7 +658,7 @@ def setup(ctx, conn, queryname):
                 .from_("users") \
                 .where_like("name", f'{INSERT_PREFIX}%')
 
-            c.exec(delete_query.query(), delete_query.values())
+            c.exec(delete_query.assemble())
 
         elif queryname in {'insert_movie', 'insert_movie_plus'}:
             # Clean up test data - we need to use raw queries for some complex JOINs
@@ -663,14 +686,14 @@ def setup(ctx, conn, queryname):
                 .from_("movies") \
                 .where_like("image", f'{INSERT_PREFIX}%')
 
-            c.exec(delete_movies_query.query(), delete_movies_query.values())
+            c.exec(delete_movies_query.assemble())
 
             # Delete test persons
             delete_persons_query = delete.Delete() \
                 .from_("persons") \
                 .where_like("image", f'{INSERT_PREFIX}%')
 
-            c.exec(delete_persons_query.query(), delete_persons_query.values())
+            c.exec(delete_persons_query.assemble())
 
 def cleanup(ctx, conn, queryname):
     """
