@@ -25,6 +25,7 @@ from _go.http import queries_http as edgedb_edgeql_golang
 from _django import queries as django_queries
 from _django import queries_restfw as django_queries_restfw
 from _mongodb import queries as mongodb_queries
+from _rick_db import queries as rick_db_queries
 from _sqlalchemy import queries as sqlalchemy_queries
 from _sqlalchemy import queries_asyncio as sqlalchemy_queries_asyncio
 from _postgres import queries as postgres_queries
@@ -68,6 +69,9 @@ IMPLEMENTATIONS = {
 
     'mongodb':
         impl('python', 'MongoDB (Python)', mongodb_queries),
+        
+    'rick_db':
+        impl('python', 'Rick DB (Python)', rick_db_queries),
 
     'sqlalchemy':
         impl('python', 'SQLAlchemy', sqlalchemy_queries),
