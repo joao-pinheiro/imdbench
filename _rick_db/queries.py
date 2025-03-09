@@ -412,30 +412,32 @@ def update_movie(conn, id):
     suffix = f'---{str(id)[:8]}'
 
     # Using rick_db's Update builder
-    with conn.transaction():
-        update_query = update.Update(dialect) \
-            .table("movies") \
-            .set({"title": L("movies.title || %s")}) \
-            .where("id", "=", id) \
-            .returning(["id", "title"])
+    conn.begin()
+    update_query = update.Update(dialect) \
+        .table("movies") \
+        .set({"title": L("movies.title || %s")}) \
+        .where("id", "=", id) \
+        .returning(["id", "title"])
 
-        # We need to append the parameter for the concatenation expression
-        # to the values list since we used a Literal expression
-        values = update_query.values()
-        values.append(suffix)
+    # We need to append the parameter for the concatenation expression
+    # to the values list since we used a Literal expression
+    values = update_query.values()
+    values.append(suffix)
 
-        # Execute the query
-        with conn.cursor() as c:
-            q, v = update_query.assemble()
-            result = c.exec(q.v)
+    # Execute the query
+    with conn.cursor() as c:
+        q, v = update_query.assemble()
+        result = c.exec(q.v)
 
-        if not result or len(result) == 0:
-            return json.dumps({})
+    conn.commit()
 
-        return json.dumps({
-            'id': result[0]['id'],
-            'title': result[0]['title'],
-        })
+    if not result or len(result) == 0:
+        return json.dumps({})
+
+    return json.dumps({
+        'id': result[0]['id'],
+        'title': result[0]['title'],
+    })
 
 
 def insert_user(conn, val):
@@ -446,26 +448,28 @@ def insert_user(conn, val):
     num = random.randrange(1_000_000)
     dialect = PgSqlDialect()
 
-    with conn.transaction():
-        # Using rick_db's Insert builder
-        insert_query = insert.Insert(dialect) \
-            .into("users") \
-            .values({
-            "name": f'{val}{num}',
-            "image": f'{val}image{num}'
-        }) \
-            .returning(["id", "name", "image"])
+    conn.begin()
 
-        # Execute the query
-        with conn.cursor() as c:
-            q, v = insert_query.assemble()
-            result = c.fetchone(q, v)
+    # Using rick_db's Insert builder
+    insert_query = insert.Insert(dialect) \
+        .into("users") \
+        .values({
+        "name": f'{val}{num}',
+        "image": f'{val}image{num}'
+    }) \
+        .returning(["id", "name", "image"])
 
-        return json.dumps({
-            'id': result['id'],
-            'name': result['name'],
-            'image': result['image'],
-        })
+    # Execute the query
+    with conn.cursor() as c:
+        q, v = insert_query.assemble()
+        result = c.fetchone(q, v)
+    conn.commit()
+
+    return json.dumps({
+        'id': result['id'],
+        'name': result['name'],
+        'image': result['image'],
+    })
 
 
 def insert_movie(conn, val):
@@ -476,56 +480,56 @@ def insert_movie(conn, val):
     num = random.randrange(1_000_000)
     dialect = PgSqlDialect()
 
-    with conn.transaction():
-        # Insert movie
-        movie_insert = insert.Insert(dialect) \
-            .into("movies") \
-            .values({
-            "title": f'{val["prefix"]}{num}',
-            "image": f'{val["prefix"]}image{num}.jpeg',
-            "description": f'{val["prefix"]}description{num}',
-            "year": num % 100 + 1920  # A year between 1920 and 2019
-        }) \
-            .returning(["id", "title", "image", "description", "year"])
+    conn.begin()
+    # Insert movie
+    movie_insert = insert.Insert(dialect) \
+        .into("movies") \
+        .values({
+        "title": f'{val["prefix"]}{num}',
+        "image": f'{val["prefix"]}image{num}.jpeg',
+        "description": f'{val["prefix"]}description{num}',
+        "year": num % 100 + 1920  # A year between 1920 and 2019
+    }) \
+        .returning(["id", "title", "image", "description", "year"])
 
-        with conn.cursor() as c:
-            q, v = movie_insert.assemble()
-            movie = c.fetchone(q, v)
+    with conn.cursor() as c:
+        q, v = movie_insert.assemble()
+        movie = c.fetchone(q, v)
 
-        # Get director and actors
-        people_query = select.Select(dialect) \
-            .fields(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"]) \
-            .from_("persons") \
-            .where_in("id", val["people"][:4])
+    # Get director and actors
+    people_query = select.Select(dialect) \
+        .fields(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"]) \
+        .from_("persons") \
+        .where_in("id", val["people"][:4])
 
-        with conn.cursor() as c:
-            q, v = people_query.assemble()
-            people = c.exec(q, v)
+    with conn.cursor() as c:
+        q, v = people_query.assemble()
+        people = c.exec(q, v)
 
-        # Add director
-        director_insert = insert.Insert(dialect) \
-            .into("directors") \
-            .values({
-            "person_id": people[0]["id"],
-            "movie_id": movie["id"]
-        })
+    # Add director
+    director_insert = insert.Insert(dialect) \
+        .into("directors") \
+        .values({
+        "person_id": people[0]["id"],
+        "movie_id": movie["id"]
+    })
 
-        with conn.cursor() as c:
-            q, v = director_insert.assemble()
+    with conn.cursor() as c:
+        q, v = director_insert.assemble()
+        c.exec(q, v)
+
+    # Add actors
+    with conn.cursor() as c:
+        for i in range(1, 4):
+            actor_insert = insert.Insert(dialect) \
+                .into("actors") \
+                .values({
+                "person_id": people[i]["id"],
+                "movie_id": movie["id"]
+            })
+            q, v = actor_insert.assemble()
             c.exec(q, v)
-
-        # Add actors
-        with conn.cursor() as c:
-            for i in range(1, 4):
-                actor_insert = insert.Insert(dialect) \
-                    .into("actors") \
-                    .values({
-                    "person_id": people[i]["id"],
-                    "movie_id": movie["id"]
-                })
-                q, v = actor_insert.assemble()
-                c.exec(q, v)
-
+    conn.commit()
     # Construct response object
     return json.dumps({
         'id': movie['id'],
@@ -558,99 +562,102 @@ def insert_movie_plus(conn, val):
     num = random.randrange(1_000_000)
     dialect = PgSqlDialect()
 
-    with conn.transaction():
-        with conn.cursor() as c:
-            # Insert movie
-            movie_insert = insert.Insert(dialect) \
-                .into("movies") \
-                .values({
-                "title": f'{val}{num}',
-                "image": f'{val}image{num}.jpeg',
-                "description": f'{val}description{num}',
-                "year": num % 100 + 1920  # A year between 1920 and 2019
-            }) \
-                .returning(["id", "title", "image", "description", "year"])
+    conn.begin()
 
-            q, v = movie_insert.assemble()
-            movie = c.fetchone(q, v)
+    with conn.cursor() as c:
+        # Insert movie
+        movie_insert = insert.Insert(dialect) \
+            .into("movies") \
+            .values({
+            "title": f'{val}{num}',
+            "image": f'{val}image{num}.jpeg',
+            "description": f'{val}description{num}',
+            "year": num % 100 + 1920  # A year between 1920 and 2019
+        }) \
+            .returning(["id", "title", "image", "description", "year"])
 
-            # Insert director
-            director_insert = insert.Insert(dialect) \
-                .into("persons") \
-                .values({
-                "first_name": f'{val}Alice',
-                "last_name": f'{val}Director',
-                "middle_name": '',
-                "image": f'{val}image{num}.jpeg',
-                "bio": ''
-            }) \
-                .returning(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"])
+        q, v = movie_insert.assemble()
+        movie = c.fetchone(q, v)
 
-            q, v = director_insert.assemble()
-            director = c.fetchone(q, v)
+        # Insert director
+        director_insert = insert.Insert(dialect) \
+            .into("persons") \
+            .values({
+            "first_name": f'{val}Alice',
+            "last_name": f'{val}Director',
+            "middle_name": '',
+            "image": f'{val}image{num}.jpeg',
+            "bio": ''
+        }) \
+            .returning(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"])
 
-            # Insert actor 1
-            actor1_insert = insert.Insert(dialect) \
-                .into("persons") \
-                .values({
-                "first_name": f'{val}Billie',
-                "last_name": f'{val}Actor',
-                "middle_name": '',
-                "image": f'{val}image{num + 1}.jpeg',
-                "bio": ''
-            }) \
-                .returning(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"])
+        q, v = director_insert.assemble()
+        director = c.fetchone(q, v)
 
-            q, v = actor1_insert.assemble()
-            actor1 = c.fetchone(q, v)
+        # Insert actor 1
+        actor1_insert = insert.Insert(dialect) \
+            .into("persons") \
+            .values({
+            "first_name": f'{val}Billie',
+            "last_name": f'{val}Actor',
+            "middle_name": '',
+            "image": f'{val}image{num + 1}.jpeg',
+            "bio": ''
+        }) \
+            .returning(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"])
 
-            # Insert actor 2
-            actor2_insert = insert.Insert(dialect) \
-                .into("persons") \
-                .values({
-                "first_name": f'{val}Cameron',
-                "last_name": f'{val}Actor',
-                "middle_name": '',
-                "image": f'{val}image{num + 2}.jpeg',
-                "bio": ''
-            }) \
-                .returning(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"])
+        q, v = actor1_insert.assemble()
+        actor1 = c.fetchone(q, v)
 
-            q, v = actor2_insert.assemble()
-            actor2 = c.fetchone(q, v)
+        # Insert actor 2
+        actor2_insert = insert.Insert(dialect) \
+            .into("persons") \
+            .values({
+            "first_name": f'{val}Cameron',
+            "last_name": f'{val}Actor',
+            "middle_name": '',
+            "image": f'{val}image{num + 2}.jpeg',
+            "bio": ''
+        }) \
+            .returning(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"])
 
-            # Link director
-            d_link_insert = insert.Insert(dialect) \
-                .into("directors") \
-                .values({
-                "person_id": director["id"],
-                "movie_id": movie["id"]
-            })
+        q, v = actor2_insert.assemble()
+        actor2 = c.fetchone(q, v)
 
-            q, v = d_link_insert.assemble()
-            c.exec(q, v)
+        # Link director
+        d_link_insert = insert.Insert(dialect) \
+            .into("directors") \
+            .values({
+            "person_id": director["id"],
+            "movie_id": movie["id"]
+        })
 
-            # Link actor 1
-            a1_link_insert = insert.Insert(dialect) \
-                .into("actors") \
-                .values({
-                "person_id": actor1["id"],
-                "movie_id": movie["id"]
-            })
+        q, v = d_link_insert.assemble()
+        c.exec(q, v)
 
-            q, v = a1_link_insert.assemble()
-            c.exec(q, v)
+        # Link actor 1
+        a1_link_insert = insert.Insert(dialect) \
+            .into("actors") \
+            .values({
+            "person_id": actor1["id"],
+            "movie_id": movie["id"]
+        })
 
-            # Link actor 2
-            a2_link_insert = insert.Insert(dialect) \
-                .into("actors") \
-                .values({
-                "person_id": actor2["id"],
-                "movie_id": movie["id"]
-            })
+        q, v = a1_link_insert.assemble()
+        c.exec(q, v)
 
-            q, v = a2_link_insert.assemble()
-            c.exec(q, v)
+        # Link actor 2
+        a2_link_insert = insert.Insert(dialect) \
+            .into("actors") \
+            .values({
+            "person_id": actor2["id"],
+            "movie_id": movie["id"]
+        })
+
+        q, v = a2_link_insert.assemble()
+        c.exec(q, v)
+
+    conn.commit()
 
     return json.dumps({
         'id': movie['id'],
