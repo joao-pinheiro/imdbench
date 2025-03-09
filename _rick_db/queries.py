@@ -13,7 +13,7 @@ from decimal import Decimal
 from rick_db import fieldmapper
 from rick_db.backend.pg import PgConnection
 from rick_db.repository import Repository
-from rick_db.sql import select, insert, update, delete, sql_with
+from rick_db.sql import select, insert, update, delete, sql_with, PgSqlDialect
 from rick_db.sql.common import Literal as L
 
 
@@ -107,10 +107,11 @@ def load_ids(ctx, conn):
     Load random IDs from the database for use in the benchmark tests.
     Uses rick_db's query builder to create the SELECT queries.
     """
+    dialect = PgSqlDialect()
     # Create random order queries with rick_db's query builder
-    user_query = select.Select().from_("users").order(L("RANDOM()")).limit(ctx.number_of_ids)
-    movie_query = select.Select().from_("movies").order(L("RANDOM()")).limit(ctx.number_of_ids)
-    person_query = select.Select().from_("persons").order(L("RANDOM()")).limit(ctx.number_of_ids)
+    user_query = select.Select(dialect).from_("users").order(L("RANDOM()")).limit(ctx.number_of_ids)
+    movie_query = select.Select(dialect).from_("movies").order(L("RANDOM()")).limit(ctx.number_of_ids)
+    person_query = select.Select(dialect).from_("persons").order(L("RANDOM()")).limit(ctx.number_of_ids)
 
     # Execute the queries
     with conn.cursor() as c:
@@ -144,9 +145,10 @@ def get_user(conn, id):
     # For complex queries like this with LATERAL joins, we use the rick_db's
     # query builder but with some raw SQL expressions for optimized query
     # structure where needed
+    dialect = PgSqlDialect()
 
     # Create the lateral subquery for reviews
-    review_subquery = select.Select() \
+    review_subquery = select.Select(dialect) \
         .fields(['review.id AS review_id',
                  'review.body AS review_body',
                  'review.rating AS review_rating',
@@ -161,7 +163,7 @@ def get_user(conn, id):
         .limit(10)
 
     # Build the main query with a LATERAL join
-    user_query = select.Select() \
+    user_query = select.Select(dialect) \
         .fields(['users.id', 'users.name', 'users.image']) \
         .from_('users') \
         .join_left_lateral(review_subquery, 'q', L('TRUE')) \
@@ -205,9 +207,10 @@ def get_movie(conn, id):
     # This query uses a mix of rick_db query builder and SQL functions
     # We use CTEs (WITH clauses) to structure complex subqueries
     values = []
+    dialect = PgSqlDialect()
 
     # Directors subquery
-    directors_query = select.Select() \
+    directors_query = select.Select(dialect) \
         .fields([L("ROW(person.id, person.full_name, person.image) AS v")]) \
         .from_("directors") \
         .join_inner("persons", "person", "directors.person_id", "person.id") \
@@ -218,7 +221,7 @@ def get_movie(conn, id):
     values.append(v)
 
     # Actors subquery
-    actors_query = select.Select() \
+    actors_query = select.Select(dialect) \
         .fields([L("ROW(person.id, person.full_name, person.image) AS v")]) \
         .from_("actors") \
         .join_inner("persons", "person", "actors.person_id", "person.id") \
@@ -229,7 +232,7 @@ def get_movie(conn, id):
     values.append(v)
 
     # Reviews subquery with nested author subquery
-    reviews_query = select.Select() \
+    reviews_query = select.Select(dialect) \
         .fields([L("""ROW(
             review.id,
             review.body,
@@ -246,7 +249,7 @@ def get_movie(conn, id):
     values.append(v)
 
     # Main movie query using rick_db's query builder
-    movie_query = select.Select() \
+    movie_query = select.Select(dialect) \
         .fields([
         'movie.id',
         'movie.image',
@@ -320,9 +323,10 @@ def get_person(conn, id):
     Uses rick_db's query builder with subqueries for related data.
     """
     # Similar approach to get_movie, using CTEs for related data
+    dialect = PgSqlDialect()
 
     # Movies acted in subquery
-    acted_in_query = select.Select() \
+    acted_in_query = select.Select(dialect) \
         .fields([L("ROW(movie.id, movie.image, movie.title, movie.year, movie.avg_rating) AS v")]) \
         .from_("actors") \
         .join_inner("movies", "movie", "actors.movie_id", "movie.id") \
@@ -334,7 +338,7 @@ def get_person(conn, id):
     values.append(v)
 
     # Movies directed subquery
-    directed_query = select.Select() \
+    directed_query = select.Select(dialect) \
         .fields([L("ROW(movie.id, movie.image, movie.title, movie.year, movie.avg_rating) AS v")]) \
         .from_("directors") \
         .join_inner("movies", "movie", "directors.movie_id", "movie.id") \
@@ -345,7 +349,7 @@ def get_person(conn, id):
     values.append(v)
 
     # Main person query
-    person_query = select.Select() \
+    person_query = select.Select(dialect) \
         .fields([
         'person.id',
         'person.full_name',
@@ -403,12 +407,13 @@ def update_movie(conn, id):
     Update a movie's title and return the updated record.
     Uses rick_db's update query builder.
     """
+    dialect = PgSqlDialect()
     # Create suffix for the movie title
     suffix = f'---{str(id)[:8]}'
 
     # Using rick_db's Update builder
     with conn.transaction():
-        update_query = update.Update() \
+        update_query = update.Update(dialect) \
             .table("movies") \
             .set({"title": L("movies.title || %s")}) \
             .where("id", "=", id) \
@@ -439,10 +444,11 @@ def insert_user(conn, val):
     Uses rick_db's insert query builder.
     """
     num = random.randrange(1_000_000)
+    dialect = PgSqlDialect()
 
     with conn.transaction():
         # Using rick_db's Insert builder
-        insert_query = insert.Insert() \
+        insert_query = insert.Insert(dialect) \
             .into("users") \
             .values({
             "name": f'{val}{num}',
@@ -468,10 +474,11 @@ def insert_movie(conn, val):
     Uses rick_db's query builders for inserts and selects.
     """
     num = random.randrange(1_000_000)
+    dialect = PgSqlDialect()
 
     with conn.transaction():
         # Insert movie
-        movie_insert = insert.Insert() \
+        movie_insert = insert.Insert(dialect) \
             .into("movies") \
             .values({
             "title": f'{val["prefix"]}{num}',
@@ -486,7 +493,7 @@ def insert_movie(conn, val):
             movie = c.fetchone(q, v)
 
         # Get director and actors
-        people_query = select.Select() \
+        people_query = select.Select(dialect) \
             .fields(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"]) \
             .from_("persons") \
             .where_in("id", val["people"][:4])
@@ -496,7 +503,7 @@ def insert_movie(conn, val):
             people = c.exec(q, v)
 
         # Add director
-        director_insert = insert.Insert() \
+        director_insert = insert.Insert(dialect) \
             .into("directors") \
             .values({
             "person_id": people[0]["id"],
@@ -510,7 +517,7 @@ def insert_movie(conn, val):
         # Add actors
         with conn.cursor() as c:
             for i in range(1, 4):
-                actor_insert = insert.Insert() \
+                actor_insert = insert.Insert(dialect) \
                     .into("actors") \
                     .values({
                     "person_id": people[i]["id"],
@@ -549,11 +556,12 @@ def insert_movie_plus(conn, val):
     Uses rick_db's query builders for the inserts.
     """
     num = random.randrange(1_000_000)
+    dialect = PgSqlDialect()
 
     with conn.transaction():
         with conn.cursor() as c:
             # Insert movie
-            movie_insert = insert.Insert() \
+            movie_insert = insert.Insert(dialect) \
                 .into("movies") \
                 .values({
                 "title": f'{val}{num}',
@@ -567,7 +575,7 @@ def insert_movie_plus(conn, val):
             movie = c.fetchone(q, v)
 
             # Insert director
-            director_insert = insert.Insert() \
+            director_insert = insert.Insert(dialect) \
                 .into("persons") \
                 .values({
                 "first_name": f'{val}Alice',
@@ -582,7 +590,7 @@ def insert_movie_plus(conn, val):
             director = c.fetchone(q, v)
 
             # Insert actor 1
-            actor1_insert = insert.Insert() \
+            actor1_insert = insert.Insert(dialect) \
                 .into("persons") \
                 .values({
                 "first_name": f'{val}Billie',
@@ -597,7 +605,7 @@ def insert_movie_plus(conn, val):
             actor1 = c.fetchone(q, v)
 
             # Insert actor 2
-            actor2_insert = insert.Insert() \
+            actor2_insert = insert.Insert(dialect) \
                 .into("persons") \
                 .values({
                 "first_name": f'{val}Cameron',
@@ -612,7 +620,7 @@ def insert_movie_plus(conn, val):
             actor2 = c.fetchone(q, v)
 
             # Link director
-            d_link_insert = insert.Insert() \
+            d_link_insert = insert.Insert(dialect) \
                 .into("directors") \
                 .values({
                 "person_id": director["id"],
@@ -623,7 +631,7 @@ def insert_movie_plus(conn, val):
             c.exec(q, v)
 
             # Link actor 1
-            a1_link_insert = insert.Insert() \
+            a1_link_insert = insert.Insert(dialect) \
                 .into("actors") \
                 .values({
                 "person_id": actor1["id"],
@@ -634,7 +642,7 @@ def insert_movie_plus(conn, val):
             c.exec(q, v)
 
             # Link actor 2
-            a2_link_insert = insert.Insert() \
+            a2_link_insert = insert.Insert(dialect) \
                 .into("actors") \
                 .values({
                 "person_id": actor2["id"],
@@ -677,10 +685,11 @@ def setup(ctx, conn, queryname):
     Set up the database for a benchmark.
     Uses rick_db's query builders for clean-up operations.
     """
+    dialect = PgSqlDialect()
     with conn.cursor() as c:
         if queryname == 'update_movie':
             # Reset movie titles that were modified by the update_movie test
-            update_query = update.Update() \
+            update_query = update.Update(dialect) \
                 .table("movies") \
                 .set({"title": L("split_part(movies.title, '---', 1)")}) \
                 .where("title", "like",  f'%---%')
@@ -690,7 +699,7 @@ def setup(ctx, conn, queryname):
 
         elif queryname == 'insert_user':
             # Delete test users
-            delete_query = delete.Delete() \
+            delete_query = delete.Delete(dialect) \
                 .from_("users") \
                 .where_like("name", "LIKE", f'{INSERT_PREFIX}%')
 
@@ -719,7 +728,7 @@ def setup(ctx, conn, queryname):
             """, [f'{INSERT_PREFIX}%'])
 
             # Delete test movies
-            delete_movies_query = delete.Delete() \
+            delete_movies_query = delete.Delete(dialect) \
                 .from_("movies") \
                 .where("image", "LIKE", f'{INSERT_PREFIX}%')
 
@@ -727,7 +736,7 @@ def setup(ctx, conn, queryname):
             c.exec(q, v)
 
             # Delete test persons
-            delete_persons_query = delete.Delete() \
+            delete_persons_query = delete.Delete(dialect) \
                 .from_("persons") \
                 .where("image", "LIKE",f'{INSERT_PREFIX}%')
 
