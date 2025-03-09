@@ -149,14 +149,13 @@ def get_user(conn, id):
 
     # Create the lateral subquery for reviews
     review_subquery = select.Select(dialect) \
-        .fields(['review.id AS review_id',
+        .from_({'reviews':'review'},['review.id AS review_id',
                  'review.body AS review_body',
                  'review.rating AS review_rating',
                  'movie.id AS movie_id',
                  'movie.image AS movie_image',
                  'movie.title AS movie_title',
                  'movie.avg_rating AS movie_avg_rating']) \
-        .from_('reviews', 'review') \
         .join_inner('movies', 'movie', 'review.movie_id', 'movie.id') \
         .where('review.author_id', '=', L('users.id')) \
         .order(Review.creation_time, 'DESC') \
@@ -164,8 +163,7 @@ def get_user(conn, id):
 
     # Build the main query with a LATERAL join
     user_query = select.Select(dialect) \
-        .fields(['users.id', 'users.name', 'users.image']) \
-        .from_('users') \
+        .from_('users', ['users.id', 'users.name', 'users.image']) \
         .join_left_lateral(review_subquery, 'q', L('TRUE')) \
         .where('users.id', '=', id)
 
@@ -211,8 +209,7 @@ def get_movie(conn, id):
 
     # Directors subquery
     directors_query = select.Select(dialect) \
-        .fields([L("ROW(person.id, person.full_name, person.image) AS v")]) \
-        .from_("directors") \
+        .from_("directors", [L("ROW(person.id, person.full_name, person.image) AS v")]) \
         .join_inner("persons", "person", "directors.person_id", "person.id") \
         .where("directors.movie_id", "=", L("movies.id")) \
         .order(L("directors.list_order NULLS LAST, person.last_name"))
@@ -222,8 +219,7 @@ def get_movie(conn, id):
 
     # Actors subquery
     actors_query = select.Select(dialect) \
-        .fields([L("ROW(person.id, person.full_name, person.image) AS v")]) \
-        .from_("actors") \
+        .from_("actors", [L("ROW(person.id, person.full_name, person.image) AS v")]) \
         .join_inner("persons", "person", "actors.person_id", "person.id") \
         .where("actors.movie_id", "=", L("movies.id")) \
         .order(L("actors.list_order NULLS LAST, person.last_name"))
@@ -233,7 +229,7 @@ def get_movie(conn, id):
 
     # Reviews subquery with nested author subquery
     reviews_query = select.Select(dialect) \
-        .fields([L("""ROW(
+        .from_({"reviews": "review"}, [L("""ROW(
             review.id,
             review.body,
             review.rating,
@@ -241,7 +237,6 @@ def get_movie(conn, id):
              FROM users AS author
              WHERE review.author_id = author.id)
         ) AS v""")]) \
-        .from_("reviews", "review") \
         .where("review.movie_id", "=", L("movies.id")) \
         .order(Review.creation_time, "DESC")
 
@@ -250,7 +245,7 @@ def get_movie(conn, id):
 
     # Main movie query using rick_db's query builder
     movie_query = select.Select(dialect) \
-        .fields([
+        .from_({"movies":"movie"}, [
         'movie.id',
         'movie.image',
         'movie.title',
@@ -264,7 +259,6 @@ def get_movie(conn, id):
         L(f"""(SELECT COALESCE(array_agg(q.v), (ARRAY[])::record[]) 
                 FROM ({rq}) AS q) AS reviews""")
     ]) \
-        .from_("movies", "movie") \
         .where("movie.id", "=", id)
 
     # Execute the query
@@ -327,8 +321,7 @@ def get_person(conn, id):
 
     # Movies acted in subquery
     acted_in_query = select.Select(dialect) \
-        .fields([L("ROW(movie.id, movie.image, movie.title, movie.year, movie.avg_rating) AS v")]) \
-        .from_("actors") \
+        .from_("actors", [L("ROW(movie.id, movie.image, movie.title, movie.year, movie.avg_rating) AS v")]) \
         .join_inner("movies", "movie", "actors.movie_id", "movie.id") \
         .where("actors.person_id", "=", L("person.id")) \
         .order(L("movie.year ASC, movie.title ASC"))
@@ -339,8 +332,7 @@ def get_person(conn, id):
 
     # Movies directed subquery
     directed_query = select.Select(dialect) \
-        .fields([L("ROW(movie.id, movie.image, movie.title, movie.year, movie.avg_rating) AS v")]) \
-        .from_("directors") \
+        .from_("directors", [L("ROW(movie.id, movie.image, movie.title, movie.year, movie.avg_rating) AS v")]) \
         .join_inner("movies", "movie", "directors.movie_id", "movie.id") \
         .where("directors.person_id", "=", L("person.id")) \
         .order(L("movie.year ASC, movie.title ASC"))
@@ -350,7 +342,7 @@ def get_person(conn, id):
 
     # Main person query
     person_query = select.Select(dialect) \
-        .fields([
+        .from_({"persons":"person"}, [
         'person.id',
         'person.full_name',
         'person.image',
@@ -360,7 +352,6 @@ def get_person(conn, id):
         L(f"""(SELECT COALESCE(array_agg(q.v), (ARRAY[])::record[]) 
                 FROM ({dq}) AS q) AS directed""")
     ]) \
-        .from_("persons", "person") \
         .where("person.id", "=", id)
 
     pq, v = person_query.assemble()
@@ -498,8 +489,7 @@ def insert_movie(conn, val):
 
     # Get director and actors
     people_query = select.Select(dialect) \
-        .fields(["id", "first_name", "last_name", "full_name(persons) as full_name", "image"]) \
-        .from_("persons") \
+        .from_("persons", ["id", "first_name", "last_name", "full_name(persons) as full_name", "image"]) \
         .where_in("id", val["people"][:4])
 
     with conn.cursor() as c:
