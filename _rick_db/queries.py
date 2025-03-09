@@ -108,9 +108,9 @@ def load_ids(ctx, conn):
     Uses rick_db's query builder to create the SELECT queries.
     """
     # Create random order queries with rick_db's query builder
-    user_query = select.Select().from_("users", "u").order(L("RANDOM()")).limit(ctx.number_of_ids)
-    movie_query = select.Select().from_("movies", "m").order(L("RANDOM()")).limit(ctx.number_of_ids)
-    person_query = select.Select().from_("persons", "p").order(L("RANDOM()")).limit(ctx.number_of_ids)
+    user_query = select.Select().from_("users").order(L("RANDOM()")).limit(ctx.number_of_ids)
+    movie_query = select.Select().from_("movies").order(L("RANDOM()")).limit(ctx.number_of_ids)
+    person_query = select.Select().from_("persons").order(L("RANDOM()")).limit(ctx.number_of_ids)
 
     # Execute the queries
     with conn.cursor() as c:
